@@ -3,7 +3,7 @@ import yt_dlp
 import os
 import re
 
-st.title("📥 YouTube Downloader (yt-dlp)")
+st.title("📥 YouTube Downloader")
 
 # 📜 Histórico
 if "historico" not in st.session_state:
@@ -31,24 +31,7 @@ if url:
         pasta = "downloads"
         os.makedirs(pasta, exist_ok=True)
 
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-
-        # 📊 Progresso
-        def progress_hook(d):
-            if d["status"] == "downloading":
-                if "_percent_str" in d:
-                    p = d["_percent_str"].replace("%", "").strip()
-                    try:
-                        progress = int(float(p))
-                        progress_bar.progress(progress)
-                        status_text.text(f"Baixando... {progress}%")
-                    except:
-                        pass
-
-            elif d["status"] == "finished":
-                progress_bar.progress(100)
-                status_text.text("Download concluído!")
+        download_area = st.empty()
 
         # ========================
         # 🎬 VÍDEO
@@ -70,12 +53,12 @@ if url:
                 ydl_opts = {
                     "format": f"bestvideo[height={altura}]+bestaudio/best",
                     "outtmpl": os.path.join(pasta, f"{titulo}.%(ext)s"),
-                    "progress_hooks": [progress_hook],
                     "merge_output_format": "mp4"
                 }
 
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([url])
+                with st.spinner("Baixando vídeo..."):
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([url])
 
                 caminho = os.path.join(pasta, f"{titulo}.mp4")
 
@@ -85,12 +68,11 @@ if url:
                     "qualidade": escolha
                 })
 
-                st.success("Vídeo baixado!")
+                st.success("Vídeo pronto!")
 
-                # 📥 botão download (funciona no cloud)
                 if os.path.exists(caminho):
                     with open(caminho, "rb") as f:
-                        st.download_button(
+                        download_area.download_button(
                             "📥 Baixar arquivo",
                             data=f,
                             file_name=f"{titulo}.mp4"
@@ -104,13 +86,17 @@ if url:
                 ydl_opts = {
                     "format": "bestaudio/best",
                     "outtmpl": os.path.join(pasta, f"{titulo}.%(ext)s"),
-                    "progress_hooks": [progress_hook],
                 }
 
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([url])
+                with st.spinner("Baixando áudio..."):
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([url])
 
-                caminho = os.path.join(pasta, f"{titulo}.webm")
+                # tenta extensões comuns
+                caminho_webm = os.path.join(pasta, f"{titulo}.webm")
+                caminho_m4a = os.path.join(pasta, f"{titulo}.m4a")
+
+                caminho = caminho_webm if os.path.exists(caminho_webm) else caminho_m4a
 
                 st.session_state.historico.append({
                     "titulo": info["title"],
@@ -118,14 +104,14 @@ if url:
                     "qualidade": "Melhor"
                 })
 
-                st.success("Áudio baixado!")
+                st.success("Áudio pronto!")
 
                 if os.path.exists(caminho):
                     with open(caminho, "rb") as f:
-                        st.download_button(
+                        download_area.download_button(
                             "📥 Baixar áudio",
                             data=f,
-                            file_name=f"{titulo}.webm"
+                            file_name=os.path.basename(caminho)
                         )
 
     except Exception as e:
