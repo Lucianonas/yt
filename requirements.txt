@@ -1,2 +1,2 @@
-streamlit
-yt-dlt
+streamlit==1.57.0
+yt-dlp
