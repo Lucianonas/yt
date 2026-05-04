@@ -13,7 +13,12 @@ url = st.text_input("Cole a URL do vídeo:")
 
 if url:
     try:
-        yt = YouTube(url)
+        # 🔥 Configuração mais robusta (ajuda no erro 403)
+        yt = YouTube(
+            url,
+            use_oauth=False,
+            allow_oauth_cache=False
+        )
 
         # 🖼️ Thumbnail
         st.image(yt.thumbnail_url, width="stretch")
@@ -27,7 +32,7 @@ if url:
 
         pasta = "downloads"
 
-        # 📁 Garante que a pasta existe
+        # 📁 Garante pasta
         if not os.path.exists(pasta):
             os.makedirs(pasta)
 
@@ -35,11 +40,11 @@ if url:
         def progress_callback(stream, chunk, bytes_remaining):
             total_size = stream.filesize or stream.filesize_approx
             if total_size:
-                bytes_downloaded = total_size - bytes_remaining
-                progress = int(bytes_downloaded / total_size * 100)
+                baixado = total_size - bytes_remaining
+                progresso = int(baixado / total_size * 100)
 
-                progress_bar.progress(progress)
-                status_text.text(f"Baixando... {progress}%")
+                progress_bar.progress(progresso)
+                status_text.text(f"Baixando... {progresso}%")
 
         yt.register_on_progress_callback(progress_callback)
 
