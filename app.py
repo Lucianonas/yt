@@ -5,11 +5,17 @@ import re
 
 st.title("📥 YouTube Downloader")
 
-# 📜 Histórico
+# 📜 Estado
 if "historico" not in st.session_state:
     st.session_state.historico = []
 
-# 🧹 Limpar nome de arquivo
+if "arquivo_bytes" not in st.session_state:
+    st.session_state.arquivo_bytes = None
+
+if "nome_arquivo" not in st.session_state:
+    st.session_state.nome_arquivo = None
+
+# 🧹 Limpar nome
 def limpar_nome(nome):
     return re.sub(r'[\\/*?:"<>|]', "", nome)
 
@@ -17,7 +23,6 @@ url = st.text_input("Cole a URL do vídeo:")
 
 if url:
     try:
-        # 🔎 Info do vídeo
         with yt_dlp.YoutubeDL({"quiet": True}) as ydl:
             info = ydl.extract_info(url, download=False)
 
@@ -26,12 +31,10 @@ if url:
         st.image(info["thumbnail"], width="stretch")
         st.subheader(info["title"])
 
-        opcao = st.radio("Escolha o formato:", ["Vídeo", "Áudio"])
+        opcao = st.radio("Formato:", ["Vídeo", "Áudio"])
 
         pasta = "downloads"
         os.makedirs(pasta, exist_ok=True)
-
-        download_area = st.empty()
 
         # ========================
         # 🎬 VÍDEO
@@ -44,8 +47,7 @@ if url:
                 reverse=True
             )
 
-            resolucoes_str = [f"{r}p" for r in resolucoes]
-            escolha = st.selectbox("Qualidade:", resolucoes_str)
+            escolha = st.selectbox("Qualidade:", [f"{r}p" for r in resolucoes])
 
             if st.button("Baixar vídeo"):
                 altura = int(escolha.replace("p", ""))
@@ -56,11 +58,16 @@ if url:
                     "merge_output_format": "mp4"
                 }
 
-                with st.spinner("Baixando vídeo..."):
+                with st.spinner("Baixando..."):
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         ydl.download([url])
 
                 caminho = os.path.join(pasta, f"{titulo}.mp4")
+
+                if os.path.exists(caminho):
+                    with open(caminho, "rb") as f:
+                        st.session_state.arquivo_bytes = f.read()
+                        st.session_state.nome_arquivo = f"{titulo}.mp4"
 
                 st.session_state.historico.append({
                     "titulo": info["title"],
@@ -69,14 +76,6 @@ if url:
                 })
 
                 st.success("Vídeo pronto!")
-
-                if os.path.exists(caminho):
-                    with open(caminho, "rb") as f:
-                        download_area.download_button(
-                            "📥 Baixar arquivo",
-                            data=f,
-                            file_name=f"{titulo}.mp4"
-                        )
 
         # ========================
         # 🎧 ÁUDIO
@@ -88,15 +87,19 @@ if url:
                     "outtmpl": os.path.join(pasta, f"{titulo}.%(ext)s"),
                 }
 
-                with st.spinner("Baixando áudio..."):
+                with st.spinner("Baixando..."):
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         ydl.download([url])
 
-                # tenta extensões comuns
                 caminho_webm = os.path.join(pasta, f"{titulo}.webm")
                 caminho_m4a = os.path.join(pasta, f"{titulo}.m4a")
 
                 caminho = caminho_webm if os.path.exists(caminho_webm) else caminho_m4a
+
+                if os.path.exists(caminho):
+                    with open(caminho, "rb") as f:
+                        st.session_state.arquivo_bytes = f.read()
+                        st.session_state.nome_arquivo = os.path.basename(caminho)
 
                 st.session_state.historico.append({
                     "titulo": info["title"],
@@ -106,27 +109,29 @@ if url:
 
                 st.success("Áudio pronto!")
 
-                if os.path.exists(caminho):
-                    with open(caminho, "rb") as f:
-                        download_area.download_button(
-                            "📥 Baixar áudio",
-                            data=f,
-                            file_name=os.path.basename(caminho)
-                        )
-
     except Exception as e:
         st.error(f"Erro: {e}")
+
+# ========================
+# 📥 BOTÃO FIXO (SEM BUG)
+# ========================
+if st.session_state.arquivo_bytes:
+    st.download_button(
+        "📥 Baixar arquivo",
+        data=st.session_state.arquivo_bytes,
+        file_name=st.session_state.nome_arquivo
+    )
 
 # ========================
 # 📜 HISTÓRICO
 # ========================
 st.divider()
-st.subheader("📜 Histórico de downloads")
+st.subheader("📜 Histórico")
 
 if st.session_state.historico:
     for item in reversed(st.session_state.historico):
         st.write(f"🎬 {item['titulo']}")
-        st.write(f"Tipo: {item['tipo']} | Qualidade: {item['qualidade']}")
+        st.write(f"{item['tipo']} | {item['qualidade']}")
         st.write("---")
 else:
     st.info("Nenhum download ainda.")
