@@ -1,7 +1,7 @@
 import streamlit as st
 import yt_dlp
 import os
-import platform
+import re
 
 st.title("📥 YouTube Downloader (yt-dlp)")
 
@@ -9,13 +9,19 @@ st.title("📥 YouTube Downloader (yt-dlp)")
 if "historico" not in st.session_state:
     st.session_state.historico = []
 
+# 🧹 Limpar nome de arquivo
+def limpar_nome(nome):
+    return re.sub(r'[\\/*?:"<>|]', "", nome)
+
 url = st.text_input("Cole a URL do vídeo:")
 
 if url:
     try:
-        # 🔎 Pega informações do vídeo
+        # 🔎 Info do vídeo
         with yt_dlp.YoutubeDL({"quiet": True}) as ydl:
             info = ydl.extract_info(url, download=False)
+
+        titulo = limpar_nome(info["title"])
 
         st.image(info["thumbnail"], width="stretch")
         st.subheader(info["title"])
@@ -28,7 +34,7 @@ if url:
         progress_bar = st.progress(0)
         status_text = st.empty()
 
-        # 📊 Hook de progresso
+        # 📊 Progresso
         def progress_hook(d):
             if d["status"] == "downloading":
                 if "_percent_str" in d:
@@ -50,7 +56,6 @@ if url:
         if opcao == "Vídeo":
             formatos = info.get("formats", [])
 
-            # filtrar resoluções com vídeo
             resolucoes = sorted(
                 list(set(f.get("height") for f in formatos if f.get("height"))),
                 reverse=True
@@ -64,13 +69,15 @@ if url:
 
                 ydl_opts = {
                     "format": f"bestvideo[height={altura}]+bestaudio/best",
-                    "outtmpl": os.path.join(pasta, "%(title)s.%(ext)s"),
+                    "outtmpl": os.path.join(pasta, f"{titulo}.%(ext)s"),
                     "progress_hooks": [progress_hook],
                     "merge_output_format": "mp4"
                 }
 
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
+
+                caminho = os.path.join(pasta, f"{titulo}.mp4")
 
                 st.session_state.historico.append({
                     "titulo": info["title"],
@@ -80,6 +87,15 @@ if url:
 
                 st.success("Vídeo baixado!")
 
+                # 📥 botão download (funciona no cloud)
+                if os.path.exists(caminho):
+                    with open(caminho, "rb") as f:
+                        st.download_button(
+                            "📥 Baixar arquivo",
+                            data=f,
+                            file_name=f"{titulo}.mp4"
+                        )
+
         # ========================
         # 🎧 ÁUDIO
         # ========================
@@ -87,12 +103,14 @@ if url:
             if st.button("Baixar áudio"):
                 ydl_opts = {
                     "format": "bestaudio/best",
-                    "outtmpl": os.path.join(pasta, "%(title)s.%(ext)s"),
+                    "outtmpl": os.path.join(pasta, f"{titulo}.%(ext)s"),
                     "progress_hooks": [progress_hook],
                 }
 
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
+
+                caminho = os.path.join(pasta, f"{titulo}.webm")
 
                 st.session_state.historico.append({
                     "titulo": info["title"],
@@ -102,24 +120,16 @@ if url:
 
                 st.success("Áudio baixado!")
 
+                if os.path.exists(caminho):
+                    with open(caminho, "rb") as f:
+                        st.download_button(
+                            "📥 Baixar áudio",
+                            data=f,
+                            file_name=f"{titulo}.webm"
+                        )
+
     except Exception as e:
         st.error(f"Erro: {e}")
-
-# ========================
-# 📂 ABRIR PASTA
-# ========================
-st.divider()
-
-if st.button("📂 Abrir pasta de downloads"):
-    try:
-        if platform.system() == "Windows":
-            os.startfile("downloads")
-        elif platform.system() == "Darwin":
-            os.system("open downloads")
-        else:
-            os.system("xdg-open downloads")
-    except:
-        st.error("Não foi possível abrir a pasta.")
 
 # ========================
 # 📜 HISTÓRICO
