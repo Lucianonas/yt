@@ -58,7 +58,7 @@ if url:
                     altura = int(qualidade.replace("p", ""))
 
                     ydl_opts = {
-                        "format": f"bestvideo[height={altura}]+bestaudio/best",
+                        "format": f"best[height<={altura}]",
                         "outtmpl": os.path.join(pasta, f"{titulo}.%(ext)s"),
                         "merge_output_format": "mp4"
                     }
