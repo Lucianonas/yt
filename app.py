@@ -3,9 +3,8 @@ import yt_dlp
 import os
 import re
 
-st.set_page_config(page_title="Downloader", layout="centered")
-
-st.title("📥 YouTube Downloader")
+st.set_page_config(page_title="Downloader PRO", layout="centered")
+st.title("📥 YouTube Downloader (PRO)")
 
 # Estado
 if "arquivo_bytes" not in st.session_state:
@@ -18,11 +17,65 @@ if "historico" not in st.session_state:
 def limpar_nome(nome):
     return re.sub(r'[\\/*?:"<>|]', "", nome)
 
+# 🔥 Config base anti-403
+def base_opts(pasta, titulo):
+    return {
+        "outtmpl": os.path.join(pasta, f"{titulo}.%(ext)s"),
+        "quiet": True,
+        "nocheckcertificate": True,
+        "geo_bypass": True,
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0",
+            "Accept-Language": "en-US,en;q=0.9"
+        }
+    }
+
+# 🧠 Função blindada
+def baixar_blindado(url, pasta, titulo, altura=None, tipo="video"):
+    tentativas = []
+
+    if tipo == "video":
+        tentativas = [
+            # 🔥 melhor qualidade (precisa ffmpeg)
+            {
+                "format": f"bestvideo[height={altura}]+bestaudio/best",
+                "merge_output_format": "mp4"
+            },
+            # ⚠️ médio
+            {
+                "format": f"best[height<={altura}]"
+            },
+            # 🛡️ fallback total
+            {
+                "format": "best"
+            }
+        ]
+    else:
+        tentativas = [
+            {"format": "bestaudio/best"},
+            {"format": "worstaudio"}
+        ]
+
+    for tentativa in tentativas:
+        try:
+            opts = base_opts(pasta, titulo)
+            opts.update(tentativa)
+
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                ydl.download([url])
+
+            return True  # sucesso
+
+        except Exception as e:
+            print("Tentativa falhou:", e)
+
+    return False  # todas falharam
+
+
 url = st.text_input("Cole a URL do vídeo:")
 
 if url:
     try:
-        # Cache evita rerun bugado
         @st.cache_data(show_spinner=False)
         def get_info(u):
             with yt_dlp.YoutubeDL({"quiet": True}) as ydl:
@@ -40,64 +93,53 @@ if url:
             reverse=True
         )
 
-        with st.form("form_download"):
+        with st.form("form"):
             tipo = st.radio("Formato:", ["Vídeo", "Áudio"])
             qualidade = st.selectbox(
                 "Qualidade:",
                 [f"{r}p" for r in resolucoes] if tipo == "Vídeo" else ["Melhor"]
             )
+            enviar = st.form_submit_button("Baixar")
 
-            submit = st.form_submit_button("Baixar")
-
-        if submit:
+        if enviar:
             pasta = "downloads"
             os.makedirs(pasta, exist_ok=True)
 
-            with st.spinner("Baixando..."):
-                if tipo == "Vídeo":
-                    altura = int(qualidade.replace("p", ""))
+            with st.spinner("Tentando baixar (modo blindado)..."):
+                altura = int(qualidade.replace("p", "")) if tipo == "Vídeo" else None
 
-                    ydl_opts = {
-                        "format": f"best[height<={altura}]",
-                        "outtmpl": os.path.join(pasta, f"{titulo}.%(ext)s"),
-                        "merge_output_format": "mp4"
-                    }
+                sucesso = baixar_blindado(
+                    url,
+                    pasta,
+                    titulo,
+                    altura,
+                    tipo.lower()
+                )
 
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        ydl.download([url])
+            if not sucesso:
+                st.error("❌ Não foi possível baixar esse vídeo.")
+            else:
+                # detectar arquivo
+                for ext in ["mp4", "webm", "m4a"]:
+                    caminho = os.path.join(pasta, f"{titulo}.{ext}")
+                    if os.path.exists(caminho):
+                        with open(caminho, "rb") as f:
+                            st.session_state.arquivo_bytes = f.read()
+                            st.session_state.nome_arquivo = os.path.basename(caminho)
+                        break
 
-                    caminho = os.path.join(pasta, f"{titulo}.mp4")
+                st.session_state.historico.append({
+                    "titulo": info["title"],
+                    "tipo": tipo,
+                    "qualidade": qualidade
+                })
 
-                else:
-                    ydl_opts = {
-                        "format": "bestaudio/best",
-                        "outtmpl": os.path.join(pasta, f"{titulo}.%(ext)s"),
-                    }
-
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        ydl.download([url])
-
-                    caminho_webm = os.path.join(pasta, f"{titulo}.webm")
-                    caminho_m4a = os.path.join(pasta, f"{titulo}.m4a")
-                    caminho = caminho_webm if os.path.exists(caminho_webm) else caminho_m4a
-
-            if os.path.exists(caminho):
-                with open(caminho, "rb") as f:
-                    st.session_state.arquivo_bytes = f.read()
-                    st.session_state.nome_arquivo = os.path.basename(caminho)
-
-            st.session_state.historico.append({
-                "titulo": info["title"],
-                "tipo": tipo,
-                "qualidade": qualidade
-            })
-
-            st.success("Download concluído!")
+                st.success("Download concluído!")
 
     except Exception as e:
         st.error(f"Erro: {e}")
 
-# Botão fixo
+# botão fixo
 if st.session_state.arquivo_bytes:
     st.download_button(
         "📥 Baixar arquivo",
@@ -105,7 +147,7 @@ if st.session_state.arquivo_bytes:
         file_name=st.session_state.nome_arquivo
     )
 
-# Histórico
+# histórico
 st.divider()
 st.subheader("📜 Histórico")
 
